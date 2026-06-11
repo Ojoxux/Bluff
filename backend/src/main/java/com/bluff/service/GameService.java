@@ -15,12 +15,14 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 @Service
 public class GameService {
 
     private final GameRepository repository;
     private final CpuStrategy cpuStrategy;
+    private final ConcurrentHashMap<String, Object> gameLocks = new ConcurrentHashMap<>();
 
     @Autowired
     public GameService(GameRepository repository) {
@@ -33,12 +35,15 @@ public class GameService {
     }
 
     public String joinGame(String gameId, String name) {
-        Game game = requireGame(gameId);
-        String playerId = UUID.randomUUID().toString();
-        String displayName = (name == null || name.isBlank()) ? "player" : name.trim();
-        game.join(playerId, displayName);
-        repository.save(game);
-        return playerId;
+        Object lock = gameLocks.computeIfAbsent(gameId, k -> new Object());
+        synchronized (lock) {
+            Game game = requireGame(gameId);
+            String playerId = UUID.randomUUID().toString();
+            String displayName = (name == null || name.isBlank()) ? "player" : name.trim();
+            game.join(playerId, displayName);
+            repository.save(game);
+            return playerId;
+        }
     }
 
     public CreateGameResult createGame(String name, int cpuCount) {
@@ -58,30 +63,39 @@ public class GameService {
     }
 
     public void startGame(String gameId, String playerId) {
-        Game game = requireGame(gameId);
-        game.start(playerId);
-        repository.save(game);
-        runCpuUntilHumanOrFinished(game);
+        Object lock = gameLocks.computeIfAbsent(gameId, k -> new Object());
+        synchronized (lock) {
+            Game game = requireGame(gameId);
+            game.start(playerId);
+            repository.save(game);
+            runCpuUntilHumanOrFinished(game);
+        }
     }
 
     public void performAction(String gameId, Action action) {
-        Game game = requireGame(gameId);
-        switch (action.getType()) {
-            case JOIN, START -> throw new IllegalArgumentException("JOIN と START はこのエンドポイントでは受け付けません");
-            case BID -> {
-                if (action.getQuantity() == null || action.getFace() == null) {
-                    throw new IllegalArgumentException("BID には quantity と face が必要です");
+        Object lock = gameLocks.computeIfAbsent(gameId, k -> new Object());
+        synchronized (lock) {
+            Game game = requireGame(gameId);
+            switch (action.getType()) {
+                case JOIN, START -> throw new IllegalArgumentException("JOIN と START はこのエンドポイントでは受け付けません");
+                case BID -> {
+                    if (action.getQuantity() == null || action.getFace() == null) {
+                        throw new IllegalArgumentException("BID には quantity と face が必要です");
+                    }
+                    game.bid(action.getPlayerId(), action.getQuantity(), action.getFace());
                 }
-                game.bid(action.getPlayerId(), action.getQuantity(), action.getFace());
+                case CHALLENGE -> game.challenge(action.getPlayerId());
             }
-            case CHALLENGE -> game.challenge(action.getPlayerId());
+            persistAfterMutation(game);
         }
-        persistAfterMutation(game);
     }
 
     public GameDetailView getGame(String gameId, String viewerPlayerId) {
-        Game game = requireGame(gameId);
-        return toDetailView(game, viewerPlayerId);
+        Object lock = gameLocks.computeIfAbsent(gameId, k -> new Object());
+        synchronized (lock) {
+            Game game = requireGame(gameId);
+            return toDetailView(game, viewerPlayerId);
+        }
     }
 
     public List<GameListItem> listGames() {
