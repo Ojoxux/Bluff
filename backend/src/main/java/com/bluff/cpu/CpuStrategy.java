@@ -37,7 +37,8 @@ public final class CpuStrategy {
         if (legal.isEmpty()) {
             return new Decision.Challenge();
         }
-        Bid pick = legal.get(random.nextInt(legal.size()));
+        List<Bid> conservative = smallestQuantityBids(legal);
+        Bid pick = conservative.get(random.nextInt(conservative.size()));
         return new Decision.Bid(pick.getQuantity(), pick.getFace());
     }
 
@@ -92,6 +93,20 @@ public final class CpuStrategy {
                 if (Game.isValidBidAfter(prev, next)) {
                     out.add(next);
                 }
+            }
+        }
+        return out;
+    }
+
+    private static List<Bid> smallestQuantityBids(List<Bid> legal) {
+        int minQ = Integer.MAX_VALUE;
+        for (Bid bid : legal) {
+            minQ = Math.min(minQ, bid.getQuantity());
+        }
+        List<Bid> out = new ArrayList<>();
+        for (Bid bid : legal) {
+            if (bid.getQuantity() == minQ) {
+                out.add(bid);
             }
         }
         return out;

@@ -152,12 +152,11 @@ public class Game {
         if (!players.get(idx).getId().equals(playerId)) {
             throw new IllegalStateException("今の番の人が違います");
         }
+        if (!isBidWithinTable(quantity, face)) {
+            throw new IllegalStateException("無効なBidです");
+        }
         Bid nextBid = new Bid(quantity, face, playerId);
-        if (currentBid == null) {
-            if (quantity < 1 || face < 1 || face > 6) {
-                throw new IllegalStateException("無効なBidです");
-            }
-        } else if (!isValidBidAfter(currentBid, nextBid)) {
+        if (currentBid != null && !isValidBidAfter(currentBid, nextBid)) {
             throw new IllegalStateException("前の宣言より強い宣言ではありません。");
         }
         setCurrentBid(nextBid);
@@ -191,6 +190,10 @@ public class Game {
             return qN > qP;
         }
         return false;
+    }
+
+    private boolean isBidWithinTable(int quantity, int face) {
+        return quantity >= 1 && face >= 1 && face <= 6 && quantity <= totalSurvivorDiceCount();
     }
 
     private void nextTurn() {
@@ -407,6 +410,16 @@ public class Game {
             }
         }
         return c;
+    }
+
+    private int totalSurvivorDiceCount() {
+        int total = 0;
+        for (Player p : players) {
+            if (!p.isEliminated()) {
+                total += p.getDice().size();
+            }
+        }
+        return total;
     }
 
     private Player requirePlayer(String playerId) {
