@@ -16,8 +16,13 @@ public class Game {
     private String pendingOpeningPlayerId;
     private List<TurnLogEntry> actionLog;
     private int currentRound;
+    private final Random random;
 
     public Game(String id, String hostPlayerId) {
+        this(id, hostPlayerId, new Random());
+    }
+
+    public Game(String id, String hostPlayerId, Random random) {
         this.id = id;
         this.state = GameState.WAITING;
         this.players = new ArrayList<>();
@@ -28,6 +33,7 @@ public class Game {
         this.pendingOpeningPlayerId = null;
         this.actionLog = new ArrayList<>();
         this.currentRound = 0;
+        this.random = random;
     }
 
     public String getId() {
@@ -122,7 +128,6 @@ public class Game {
 
         state = GameState.PLAYING;
 
-        Random random = new Random();
         for (Player player : players) {
             List<Integer> playerDices = new ArrayList<Integer>();
             for (int i = 0;i < 5;i++){
@@ -281,7 +286,6 @@ public class Game {
             return;
         }
 
-        Random random = new Random();
         for (Player p : players) {
             if (p.isEliminated()) {
                 continue;
