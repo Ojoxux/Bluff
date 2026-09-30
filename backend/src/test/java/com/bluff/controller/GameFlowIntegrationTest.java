@@ -50,7 +50,16 @@ class GameFlowIntegrationTest {
         performBid(cg.gameId(), cg.humanPlayerId(), legal[0], legal[1]);
 
         JsonNode after = getGame(cg.gameId(), cg.humanPlayerId());
-        assertThat(after.get("currentBid").get("playerId").asText()).isNotEqualTo(cg.humanPlayerId());
+        JsonNode log = after.get("actionLog");
+        int humanBidIndex = -1;
+        for (int i = 0; i < log.size(); i++) {
+            JsonNode e = log.get(i);
+            if ("BID".equals(e.get("type").asText()) && cg.humanPlayerId().equals(e.get("playerId").asText())) {
+                humanBidIndex = i;
+            }
+        }
+        assertThat(humanBidIndex).isGreaterThanOrEqualTo(0).isLessThan(log.size() - 1);
+        assertThat(log.get(humanBidIndex + 1).get("playerId").asText()).isNotEqualTo(cg.humanPlayerId());
     }
 
     @Test

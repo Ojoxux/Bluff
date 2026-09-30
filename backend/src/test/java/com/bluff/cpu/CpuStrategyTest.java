@@ -26,12 +26,12 @@ class CpuStrategyTest {
 
         assertThat(d).isInstanceOf(CpuStrategy.Decision.Bid.class);
         CpuStrategy.Decision.Bid bid = (CpuStrategy.Decision.Bid) d;
-        assertThat(bid.quantity()).isEqualTo(3);
+        assertThat(bid.quantity()).isEqualTo(4);
         assertThat(bid.face()).isEqualTo(2);
     }
 
     @Test
-    void openingBid_emptyDice_fallsBackToOneOne() {
+    void openingBid_emptyDice_bidsOneOfSomeNumber() {
         Player cpu = new Player("cpu", "CPU 1", true);
         cpu.setDice(List.of());
         Game game = minimalPlayingGame(cpu, stubHuman());
@@ -40,7 +40,10 @@ class CpuStrategyTest {
         CpuStrategy strategy = new CpuStrategy(new Random(1));
         CpuStrategy.Decision d = strategy.decideAction(game, cpu);
 
-        assertThat(d).isEqualTo(new CpuStrategy.Decision.Bid(1, 1));
+        assertThat(d).isInstanceOf(CpuStrategy.Decision.Bid.class);
+        CpuStrategy.Decision.Bid bid = (CpuStrategy.Decision.Bid) d;
+        assertThat(bid.quantity()).isEqualTo(1);
+        assertThat(bid.face()).isBetween(1, 5);
     }
 
     @Test
@@ -101,13 +104,62 @@ class CpuStrategyTest {
         CpuStrategy strategy = new CpuStrategy(pickLargestCandidate);
         CpuStrategy.Decision d = strategy.decideAction(game, cpu);
 
-        assertThat(d).isInstanceOf(CpuStrategy.Decision.Bid.class);
-        CpuStrategy.Decision.Bid bid = (CpuStrategy.Decision.Bid) d;
-        assertThat(bid.quantity()).isLessThanOrEqualTo(totalDiceCount);
+        if (d instanceof CpuStrategy.Decision.Bid bid) {
+            assertThat(bid.quantity()).isLessThanOrEqualTo(totalDiceCount);
+        }
+    }
+
+
+    @Test
+    void challengesImplausibleBidJudgedOnlyFromOwnDice() {
+        Player cpu = new Player("cpu", "CPU 1", true);
+        cpu.setDice(List.of(1, 1, 2, 2, 3));
+        Player human = new Player("human", "Human", false);
+        human.setDice(List.of(5, 5, 5, 5, 5));
+        Game game = minimalPlayingGame(cpu, human);
+        game.setCurrentBid(new Bid(4, 5, human.getId()));
+        game.setLastBidPlayerId(human.getId());
+
+        CpuStrategy strategy = new CpuStrategy(new Random(1));
+        CpuStrategy.Decision d = strategy.decideAction(game, cpu);
+
+        assertThat(d).isInstanceOf(CpuStrategy.Decision.Challenge.class);
     }
 
     @Test
-    void followUpBid_prefersSmallestLegalQuantityInsteadOfJumpingToMaximum() {
+    void doesNotChallengeBidAlreadyCoveredByOwnDice() {
+        Player cpu = new Player("cpu", "CPU 1", true);
+        cpu.setDice(List.of(2, 2, 2, 4, 5));
+        Player human = stubHuman();
+        Game game = minimalPlayingGame(cpu, human);
+        game.setCurrentBid(new Bid(3, 2, human.getId()));
+        game.setLastBidPlayerId(human.getId());
+
+        CpuStrategy strategy = new CpuStrategy(new Random(1));
+        CpuStrategy.Decision d = strategy.decideAction(game, cpu);
+
+        assertThat(d).isInstanceOf(CpuStrategy.Decision.Bid.class);
+    }
+
+    @Test
+    void followUpBid_prefersFaceBackedByOwnDice() {
+        Player cpu = new Player("cpu", "CPU 1", true);
+        cpu.setDice(List.of(4, 4, 4, 4, 6));
+        Player human = stubHuman();
+        Game game = minimalPlayingGame(cpu, human);
+        game.setCurrentBid(new Bid(2, 1, human.getId()));
+        game.setLastBidPlayerId(human.getId());
+
+        CpuStrategy strategy = new CpuStrategy(new Random(3));
+        for (int i = 0; i < 20; i++) {
+            CpuStrategy.Decision d = strategy.decideAction(game, cpu);
+            assertThat(d).isInstanceOf(CpuStrategy.Decision.Bid.class);
+            assertThat(((CpuStrategy.Decision.Bid) d).face()).isEqualTo(4);
+        }
+    }
+
+    @Test
+    void challengesStarBidThatIsUnlikelyOnLargeTable() {
         Player cpu = new Player("cpu", "CPU 1", true);
         cpu.setDice(List.of(3, 3, 3, 3, 3));
         Player human = stubHuman();
@@ -135,7 +187,7 @@ class CpuStrategyTest {
         CpuStrategy strategy = new CpuStrategy(pickLargestCandidate);
         CpuStrategy.Decision d = strategy.decideAction(game, cpu);
 
-        assertThat(d).isEqualTo(new CpuStrategy.Decision.Bid(8, 6));
+        assertThat(d).isInstanceOf(CpuStrategy.Decision.Challenge.class);
     }
 
     @Test
