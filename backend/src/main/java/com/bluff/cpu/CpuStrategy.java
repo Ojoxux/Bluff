@@ -3,6 +3,7 @@ package com.bluff.cpu;
 import com.bluff.model.Bid;
 import com.bluff.model.Game;
 import com.bluff.model.Player;
+import com.bluff.model.TurnLogEntry;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -18,7 +19,7 @@ public final class CpuStrategy {
 
     private static final int STAR = 6;
     private static final double OPENING_CONFIDENCE = 0.6;
-    private static final double LOSS_TOLERANCE = 0.05;
+    private static final double VALUE_TOLERANCE = 0.05;
 
     private final Random random;
 
@@ -39,21 +40,29 @@ public final class CpuStrategy {
             return new Decision.Challenge();
         }
         int ownDice = cpuPlayer.getDice().size();
+        int opponents = survivorCount(game) - 1;
+        double opponentWeight = 1.0 / opponents;
+        int nextDice = nextSurvivor(game, cpuPlayer).getDice().size();
+        int bidderDice = bidderDiceCount(game, current);
+        int totalDice = totalSurvivorDiceCount(game);
         double[][] dists = countDistributionsByFace(game, cpuPlayer);
-        double bestBidLoss = Double.MAX_VALUE;
-        double[] losses = new double[legal.size()];
+        double bestBidValue = -Double.MAX_VALUE;
+        double[] values = new double[legal.size()];
         for (int i = 0; i < legal.size(); i++) {
             Bid b = legal.get(i);
-            losses[i] = expectedLossAsBidder(dists[b.getFace()], b.getQuantity(), ownDice);
-            bestBidLoss = Math.min(bestBidLoss, losses[i]);
+            double challenged = challengeProbability(totalDice, b.getQuantity(), b.getFace());
+            values[i] = challenged
+                    * expectedValueAsBidder(dists[b.getFace()], b.getQuantity(), ownDice, nextDice, opponentWeight);
+            bestBidValue = Math.max(bestBidValue, values[i]);
         }
-        double challengeLoss = expectedLossAsChallenger(dists[current.getFace()], current.getQuantity(), ownDice);
-        if (challengeLoss < bestBidLoss) {
+        double challengeValue = expectedValueAsChallenger(
+                dists[current.getFace()], current.getQuantity(), ownDice, bidderDice, opponents, opponentWeight);
+        if (challengeValue > bestBidValue) {
             return new Decision.Challenge();
         }
         List<Bid> candidates = new ArrayList<>();
         for (int i = 0; i < legal.size(); i++) {
-            if (losses[i] <= bestBidLoss + LOSS_TOLERANCE) {
+            if (values[i] >= bestBidValue - VALUE_TOLERANCE) {
                 candidates.add(legal.get(i));
             }
         }
@@ -106,12 +115,67 @@ public final class CpuStrategy {
                 known++;
             }
         }
-        int unknown = totalSurvivorDiceCount(game) - cpuPlayer.getDice().size();
         double p = face == STAR ? 1.0 / 6 : 2.0 / 6;
-        double[] binom = binomial(Math.max(unknown, 0), p);
-        double[] dist = new double[known + binom.length];
-        System.arraycopy(binom, 0, dist, known, binom.length);
+        int totalDice = totalSurvivorDiceCount(game);
+        double[] dist = new double[known + 1];
+        dist[known] = 1.0;
+        for (Player other : game.getPlayers()) {
+            if (other == cpuPlayer || other.isEliminated()) {
+                continue;
+            }
+            int n = other.getDice().size();
+            Integer claimed = latestClaimThisRound(game, other, face);
+            double[] own = claimed == null
+                    ? binomial(n, p)
+                    : handDistributionGivenClaim(n, totalDice - n, p, claimed);
+            dist = convolve(dist, own);
+        }
         return dist;
+    }
+
+    private static double[] handDistributionGivenClaim(int handDice, int otherDice, double p, int claimed) {
+        double[] prior = binomial(handDice, p);
+        double[] rest = binomial(otherDice, p);
+        double[] posterior = new double[handDice + 1];
+        double sum = 0;
+        for (int k = 0; k <= handDice; k++) {
+            double plausible = 0;
+            for (int r = Math.max(0, claimed - k); r < rest.length; r++) {
+                plausible += rest[r];
+            }
+            posterior[k] = prior[k] * plausible;
+            sum += posterior[k];
+        }
+        if (sum == 0) {
+            return prior;
+        }
+        for (int k = 0; k <= handDice; k++) {
+            posterior[k] /= sum;
+        }
+        return posterior;
+    }
+
+    private static Integer latestClaimThisRound(Game game, Player player, int face) {
+        Integer claimed = null;
+        for (TurnLogEntry e : game.getActionLog()) {
+            if (e.getRound() == game.getCurrentRound()
+                    && TurnLogEntry.TYPE_BID.equals(e.getType())
+                    && player.getId().equals(e.getPlayerId())
+                    && e.getFace() == face) {
+                claimed = e.getQuantity();
+            }
+        }
+        return claimed;
+    }
+
+    private static double[] convolve(double[] x, double[] y) {
+        double[] out = new double[x.length + y.length - 1];
+        for (int i = 0; i < x.length; i++) {
+            for (int j = 0; j < y.length; j++) {
+                out[i + j] += x[i] * y[j];
+            }
+        }
+        return out;
     }
 
     private static double[] binomial(int n, double p) {
@@ -126,20 +190,43 @@ public final class CpuStrategy {
         return dist;
     }
 
-    private static double expectedLossAsBidder(double[] dist, int q, int ownDice) {
-        double loss = 0;
-        for (int a = 0; a < dist.length && a < q; a++) {
-            loss += dist[a] * Math.min(q - a, ownDice);
+    private static double expectedValueAsBidder(
+            double[] dist, int q, int ownDice, int nextDice, double opponentWeight) {
+        double value = 0;
+        for (int a = 0; a < dist.length; a++) {
+            if (a < q) {
+                value -= dist[a] * Math.min(q - a, ownDice);
+            } else if (a == q) {
+                value += dist[a];
+            } else {
+                value += dist[a] * opponentWeight * Math.min(a - q, nextDice);
+            }
         }
-        return loss;
+        return value;
     }
 
-    private static double expectedLossAsChallenger(double[] dist, int q, int ownDice) {
-        double loss = 0;
-        for (int a = q; a < dist.length; a++) {
-            loss += dist[a] * (a == q ? 1 : Math.min(a - q, ownDice));
+    private static double expectedValueAsChallenger(
+            double[] dist, int q, int ownDice, int bidderDice, int opponents, double opponentWeight) {
+        double value = 0;
+        for (int a = 0; a < dist.length; a++) {
+            if (a < q) {
+                value += dist[a] * opponentWeight * Math.min(q - a, bidderDice);
+            } else if (a == q) {
+                value += dist[a] * (opponentWeight * (opponents - 1) - 1);
+            } else {
+                value -= dist[a] * Math.min(a - q, ownDice);
+            }
         }
-        return loss;
+        return value;
+    }
+
+    private static double challengeProbability(int totalDice, int q, int face) {
+        double[] dist = binomial(totalDice, face == STAR ? 1.0 / 6 : 2.0 / 6);
+        double below = 0;
+        for (int a = 0; a < q && a < dist.length; a++) {
+            below += dist[a];
+        }
+        return below;
     }
 
     private static int largestQuantityWithConfidence(double[] dist, double confidence) {
@@ -177,5 +264,36 @@ public final class CpuStrategy {
             }
         }
         return Math.max(n, 0);
+    }
+
+    private static int survivorCount(Game game) {
+        int n = 0;
+        for (Player p : game.getPlayers()) {
+            if (!p.isEliminated()) {
+                n++;
+            }
+        }
+        return n;
+    }
+
+    private static Player nextSurvivor(Game game, Player cpuPlayer) {
+        List<Player> players = game.getPlayers();
+        int self = players.indexOf(cpuPlayer);
+        for (int step = 1; step < players.size(); step++) {
+            Player p = players.get((self + step) % players.size());
+            if (!p.isEliminated()) {
+                return p;
+            }
+        }
+        return cpuPlayer;
+    }
+
+    private static int bidderDiceCount(Game game, Bid current) {
+        for (Player p : game.getPlayers()) {
+            if (p.getId().equals(current.getPlayerId())) {
+                return p.getDice().size();
+            }
+        }
+        return 0;
     }
 }

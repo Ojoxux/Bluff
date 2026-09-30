@@ -4,6 +4,7 @@ import com.bluff.model.Bid;
 import com.bluff.model.Game;
 import com.bluff.model.GameState;
 import com.bluff.model.Player;
+import com.bluff.model.TurnLogEntry;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -202,6 +203,61 @@ class CpuStrategyTest {
         CpuStrategy.Decision d = strategy.decideAction(game, cpu);
 
         assertThat(d).isInstanceOf(CpuStrategy.Decision.Challenge.class);
+    }
+
+    @Test
+    void challengesStarBidWhenBidderLikelyLosesEvenIfOwnRiskIsSmall() {
+        Player cpu = new Player("cpu", "CPU 1", true);
+        cpu.setDice(List.of(1, 1, 1, 1, 2));
+        Player human = stubHuman();
+        Game game = minimalPlayingGame(cpu, human);
+        game.setCurrentBid(new Bid(2, 6, human.getId()));
+        game.setLastBidPlayerId(human.getId());
+
+        for (int seed = 0; seed < 20; seed++) {
+            CpuStrategy.Decision d = new CpuStrategy(new Random(seed)).decideAction(game, cpu);
+
+            assertThat(d).isInstanceOf(CpuStrategy.Decision.Challenge.class);
+        }
+    }
+
+    @Test
+    void followUpBid_withStrongHand_prefersBidThatLooksTooHighToOthers() {
+        Player cpu = new Player("cpu", "CPU 1", true);
+        cpu.setDice(List.of(4, 4, 4, 4, 4));
+        Player human = stubHuman();
+        Game game = minimalPlayingGame(cpu, human);
+        game.setCurrentBid(new Bid(1, 1, human.getId()));
+        game.setLastBidPlayerId(human.getId());
+
+        for (int seed = 0; seed < 20; seed++) {
+            CpuStrategy.Decision d = new CpuStrategy(new Random(seed)).decideAction(game, cpu);
+
+            assertThat(d).isInstanceOf(CpuStrategy.Decision.Bid.class);
+            CpuStrategy.Decision.Bid bid = (CpuStrategy.Decision.Bid) d;
+            assertThat(bid.face()).isEqualTo(4);
+            assertThat(bid.quantity()).isGreaterThanOrEqualTo(4);
+        }
+    }
+
+    @Test
+    void trustsBidMoreWhenBidderClaimedSameFaceThisRound() {
+        Player cpu = new Player("cpu", "CPU 1", true);
+        cpu.setDice(List.of(1, 2, 3, 4, 5));
+        Player human = stubHuman();
+        Game withoutHistory = minimalPlayingGame(cpu, human);
+        withoutHistory.setCurrentBid(new Bid(3, 5, human.getId()));
+        withoutHistory.setLastBidPlayerId(human.getId());
+        Game withHistory = minimalPlayingGame(cpu, human);
+        withHistory.setCurrentBid(new Bid(3, 5, human.getId()));
+        withHistory.setLastBidPlayerId(human.getId());
+        withHistory.getActionLog().add(
+                TurnLogEntry.bid(withHistory.getCurrentRound(), human.getId(), human.getName(), 3, 5));
+
+        CpuStrategy strategy = new CpuStrategy(new Random(1));
+
+        assertThat(strategy.decideAction(withoutHistory, cpu)).isInstanceOf(CpuStrategy.Decision.Challenge.class);
+        assertThat(strategy.decideAction(withHistory, cpu)).isInstanceOf(CpuStrategy.Decision.Bid.class);
     }
 
     @Test
