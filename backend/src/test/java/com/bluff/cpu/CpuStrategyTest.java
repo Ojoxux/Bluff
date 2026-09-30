@@ -70,8 +70,7 @@ class CpuStrategyTest {
         cpu.setDice(List.of(1, 1, 1, 1, 1));
         Player human = stubHuman();
         Game game = minimalPlayingGame(cpu, human);
-        game.setCurrentBid(new Bid(11, 1, human.getId()));
-        game.setLastBidPlayerId(human.getId());
+        placeBid(game, new Bid(11, 1, human.getId()));
         game.setCurrentPlayerIndex(0);
 
         CpuStrategy strategy = new CpuStrategy(new Random(1));
@@ -87,8 +86,7 @@ class CpuStrategyTest {
         Player human = stubHuman();
         Game game = minimalPlayingGame(cpu, human);
         Bid prev = new Bid(1, 1, human.getId());
-        game.setCurrentBid(prev);
-        game.setLastBidPlayerId(human.getId());
+        placeBid(game, prev);
         game.setCurrentPlayerIndex(0);
 
         CpuStrategy strategy = new CpuStrategy(new Random(42));
@@ -120,8 +118,7 @@ class CpuStrategyTest {
             int totalDiceCount = cpu.getDice().size() + human.getDice().size();
             Game game = minimalPlayingGame(cpu, human);
             Bid prev = new Bid(1 + setup.nextInt(totalDiceCount), 1 + setup.nextInt(6), human.getId());
-            game.setCurrentBid(prev);
-            game.setLastBidPlayerId(human.getId());
+            placeBid(game, prev);
 
             if (strategy.decideAction(game, cpu) instanceof CpuStrategy.Decision.Bid(int q, int f)) {
                 bids++;
@@ -139,8 +136,7 @@ class CpuStrategyTest {
         Player human = new Player("human", "Human", false);
         human.setDice(List.of(5, 5, 5, 5, 5));
         Game game = minimalPlayingGame(cpu, human);
-        game.setCurrentBid(new Bid(4, 5, human.getId()));
-        game.setLastBidPlayerId(human.getId());
+        placeBid(game, new Bid(4, 5, human.getId()));
 
         CpuStrategy strategy = new CpuStrategy(new Random(1));
         CpuStrategy.Decision d = strategy.decideAction(game, cpu);
@@ -154,8 +150,7 @@ class CpuStrategyTest {
         cpu.setDice(List.of(2, 2, 2, 4, 5));
         Player human = stubHuman();
         Game game = minimalPlayingGame(cpu, human);
-        game.setCurrentBid(new Bid(3, 2, human.getId()));
-        game.setLastBidPlayerId(human.getId());
+        placeBid(game, new Bid(3, 2, human.getId()));
 
         CpuStrategy strategy = new CpuStrategy(new Random(1));
         CpuStrategy.Decision d = strategy.decideAction(game, cpu);
@@ -169,8 +164,7 @@ class CpuStrategyTest {
         cpu.setDice(List.of(4, 4, 4, 4, 6));
         Player human = stubHuman();
         Game game = minimalPlayingGame(cpu, human);
-        game.setCurrentBid(new Bid(2, 1, human.getId()));
-        game.setLastBidPlayerId(human.getId());
+        placeBid(game, new Bid(2, 1, human.getId()));
 
         CpuStrategy strategy = new CpuStrategy(new Random(3));
         for (int i = 0; i < 20; i++) {
@@ -195,8 +189,7 @@ class CpuStrategyTest {
         cpu5.setDice(List.of(1, 1, 1, 1, 1));
         Game game = minimalPlayingGame(cpu, human, cpu2, cpu3, cpu4, cpu5);
         Bid prev = new Bid(7, 6, human.getId());
-        game.setCurrentBid(prev);
-        game.setLastBidPlayerId(human.getId());
+        placeBid(game, prev);
         game.setCurrentPlayerIndex(0);
 
         CpuStrategy strategy = new CpuStrategy(new Random(1));
@@ -206,13 +199,12 @@ class CpuStrategyTest {
     }
 
     @Test
-    void challengesStarBidWhenBidderLikelyLosesEvenIfOwnRiskIsSmall() {
+    void challengesWhenBidderLikelyLosesEvenIfSafeRaiseExists() {
         Player cpu = new Player("cpu", "CPU 1", true);
-        cpu.setDice(List.of(1, 1, 1, 1, 2));
+        cpu.setDice(List.of(1, 1, 1, 1, 1));
         Player human = stubHuman();
         Game game = minimalPlayingGame(cpu, human);
-        game.setCurrentBid(new Bid(2, 6, human.getId()));
-        game.setLastBidPlayerId(human.getId());
+        placeBid(game, new Bid(4, 5, human.getId()));
 
         for (int seed = 0; seed < 20; seed++) {
             CpuStrategy.Decision d = new CpuStrategy(new Random(seed)).decideAction(game, cpu);
@@ -227,8 +219,7 @@ class CpuStrategyTest {
         cpu.setDice(List.of(4, 4, 4, 4, 4));
         Player human = stubHuman();
         Game game = minimalPlayingGame(cpu, human);
-        game.setCurrentBid(new Bid(1, 1, human.getId()));
-        game.setLastBidPlayerId(human.getId());
+        placeBid(game, new Bid(1, 1, human.getId()));
 
         for (int seed = 0; seed < 20; seed++) {
             CpuStrategy.Decision d = new CpuStrategy(new Random(seed)).decideAction(game, cpu);
@@ -241,23 +232,23 @@ class CpuStrategyTest {
     }
 
     @Test
-    void trustsBidMoreWhenBidderClaimedSameFaceThisRound() {
-        Player cpu = new Player("cpu", "CPU 1", true);
-        cpu.setDice(List.of(1, 2, 3, 4, 5));
-        Player human = stubHuman();
-        Game withoutHistory = minimalPlayingGame(cpu, human);
-        withoutHistory.setCurrentBid(new Bid(3, 5, human.getId()));
-        withoutHistory.setLastBidPlayerId(human.getId());
-        Game withHistory = minimalPlayingGame(cpu, human);
-        withHistory.setCurrentBid(new Bid(3, 5, human.getId()));
-        withHistory.setLastBidPlayerId(human.getId());
-        withHistory.getActionLog().add(
-                TurnLogEntry.bid(withHistory.getCurrentRound(), human.getId(), human.getName(), 3, 5));
-
+    void trustsBidMoreWhenAnotherPlayerClaimedSameFaceThisRound() {
         CpuStrategy strategy = new CpuStrategy(new Random(1));
 
-        assertThat(strategy.decideAction(withoutHistory, cpu)).isInstanceOf(CpuStrategy.Decision.Challenge.class);
-        assertThat(strategy.decideAction(withHistory, cpu)).isInstanceOf(CpuStrategy.Decision.Bid.class);
+        assertThat(decideAfterEarlierClaim(strategy, 5)).isInstanceOf(CpuStrategy.Decision.Bid.class);
+        assertThat(decideAfterEarlierClaim(strategy, 1)).isInstanceOf(CpuStrategy.Decision.Challenge.class);
+    }
+
+    private static CpuStrategy.Decision decideAfterEarlierClaim(CpuStrategy strategy, int earlierFace) {
+        Player cpu = new Player("cpu", "CPU 1", true);
+        cpu.setDice(List.of(1, 1, 2, 3, 5));
+        Player cpu2 = new Player("cpu2", "CPU 2", true);
+        cpu2.setDice(List.of(1, 1, 1, 1, 1));
+        Player human = stubHuman();
+        Game game = minimalPlayingGame(cpu, cpu2, human);
+        placeBid(game, new Bid(4, earlierFace, cpu2.getId()));
+        placeBid(game, new Bid(5, 5, human.getId()));
+        return strategy.decideAction(game, cpu);
     }
 
     @Test
@@ -284,6 +275,17 @@ class CpuStrategyTest {
 
         assertThat(game.getCurrentBid()).isNotNull();
         assertThat(game.getCurrentBid().getPlayerId()).isEqualTo(cpu.getId());
+    }
+
+    private static void placeBid(Game game, Bid bid) {
+        game.setCurrentBid(bid);
+        game.setLastBidPlayerId(bid.getPlayerId());
+        Player bidder = game.getPlayers().stream()
+                .filter(p -> p.getId().equals(bid.getPlayerId()))
+                .findFirst()
+                .orElseThrow();
+        game.getActionLog().add(TurnLogEntry.bid(
+                game.getCurrentRound(), bidder.getId(), bidder.getName(), bid.getQuantity(), bid.getFace()));
     }
 
     private static List<Integer> rollDice(Random random, int count) {
