@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.List;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class GameBidValidationTest {
@@ -21,6 +22,38 @@ class GameBidValidationTest {
         game.bid("h1", 2, 6);
 
         assertThatThrownBy(() -> game.bid("p2", 11, 6)).isInstanceOf(IllegalStateException.class);
+    }
+
+    @Test
+    void isValidBidAfter_followsReferenceExamplesForNumberFaces() {
+        Bid prev = new Bid(9, 3, "h1");
+
+        assertThat(Game.isValidBidAfter(prev, new Bid(9, 4, "p2"))).isTrue();
+        assertThat(Game.isValidBidAfter(prev, new Bid(10, 2, "p2"))).isTrue();
+        assertThat(Game.isValidBidAfter(prev, new Bid(10, 3, "p2"))).isTrue();
+        assertThat(Game.isValidBidAfter(prev, new Bid(9, 3, "p2"))).isFalse();
+        assertThat(Game.isValidBidAfter(prev, new Bid(9, 2, "p2"))).isFalse();
+        assertThat(Game.isValidBidAfter(prev, new Bid(8, 5, "p2"))).isFalse();
+    }
+
+    @Test
+    void isValidBidAfter_followsReferenceExamplesForStar() {
+        assertThat(Game.isValidBidAfter(new Bid(9, 3, "h1"), new Bid(5, 6, "p2"))).isTrue();
+        assertThat(Game.isValidBidAfter(new Bid(9, 3, "h1"), new Bid(4, 6, "p2"))).isFalse();
+        assertThat(Game.isValidBidAfter(new Bid(2, 6, "h1"), new Bid(3, 6, "p2"))).isTrue();
+        assertThat(Game.isValidBidAfter(new Bid(2, 6, "h1"), new Bid(4, 2, "p2"))).isTrue();
+        assertThat(Game.isValidBidAfter(new Bid(2, 6, "h1"), new Bid(3, 5, "p2"))).isFalse();
+    }
+
+    @Test
+    void bid_acceptsLowerFaceWithHigherQuantity() {
+        Game game = newPlayingGame();
+        game.bid("h1", 3, 5);
+
+        game.bid("p2", 4, 1);
+
+        assertThat(game.getCurrentBid().getFace()).isEqualTo(1);
+        assertThat(game.getCurrentBid().getQuantity()).isEqualTo(4);
     }
 
     private static Game newPlayingGame() {
