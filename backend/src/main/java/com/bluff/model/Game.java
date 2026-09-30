@@ -178,7 +178,7 @@ public class Game {
             return false;
         }
         if (fP >= 1 && fP <= 5 && fN >= 1 && fN <= 5) {
-            return (fN > fP && qN >= qP) || (fN == fP && qN > qP);
+            return qN > qP || (fN > fP && qN == qP);
         }
         if (fP >= 1 && fP <= 5 && fN == 6) {
             return qN * 2 > qP;
