@@ -39,15 +39,15 @@ public final class CpuStrategy {
             return new Decision.Challenge();
         }
         int ownDice = cpuPlayer.getDice().size();
+        double[][] dists = countDistributionsByFace(game, cpuPlayer);
         double bestBidLoss = Double.MAX_VALUE;
         double[] losses = new double[legal.size()];
         for (int i = 0; i < legal.size(); i++) {
             Bid b = legal.get(i);
-            losses[i] = expectedLossAsBidder(countDistribution(game, cpuPlayer, b.getFace()), b.getQuantity(), ownDice);
+            losses[i] = expectedLossAsBidder(dists[b.getFace()], b.getQuantity(), ownDice);
             bestBidLoss = Math.min(bestBidLoss, losses[i]);
         }
-        double challengeLoss =
-                expectedLossAsChallenger(countDistribution(game, cpuPlayer, current.getFace()), current.getQuantity(), ownDice);
+        double challengeLoss = expectedLossAsChallenger(dists[current.getFace()], current.getQuantity(), ownDice);
         if (challengeLoss < bestBidLoss) {
             return new Decision.Challenge();
         }
@@ -74,11 +74,11 @@ public final class CpuStrategy {
     }
 
     private Decision openingDecision(Game game, Player cpuPlayer) {
+        double[][] dists = countDistributionsByFace(game, cpuPlayer);
         int bestQ = 0;
         List<Integer> bestFaces = new ArrayList<>();
         for (int f = 1; f <= 6; f++) {
-            double[] dist = countDistribution(game, cpuPlayer, f);
-            int q = Math.max(1, largestQuantityWithConfidence(dist, OPENING_CONFIDENCE));
+            int q = largestQuantityWithConfidence(dists[f], OPENING_CONFIDENCE);
             if (q > bestQ) {
                 bestQ = q;
                 bestFaces.clear();
@@ -88,7 +88,15 @@ public final class CpuStrategy {
             }
         }
         int face = bestFaces.get(random.nextInt(bestFaces.size()));
-        return new Decision.Bid(bestQ, face);
+        return new Decision.Bid(Math.max(1, bestQ), face);
+    }
+
+    private static double[][] countDistributionsByFace(Game game, Player cpuPlayer) {
+        double[][] dists = new double[7][];
+        for (int f = 1; f <= 6; f++) {
+            dists[f] = countDistribution(game, cpuPlayer, f);
+        }
+        return dists;
     }
 
     private static double[] countDistribution(Game game, Player cpuPlayer, int face) {

@@ -31,19 +31,36 @@ class CpuStrategyTest {
     }
 
     @Test
-    void openingBid_emptyDice_bidsOneOfSomeNumber() {
+    void openingBid_emptyDice_neverBidsStarBelowConfidence() {
         Player cpu = new Player("cpu", "CPU 1", true);
         cpu.setDice(List.of());
         Game game = minimalPlayingGame(cpu, stubHuman());
         game.setCurrentBid(null);
 
-        CpuStrategy strategy = new CpuStrategy(new Random(1));
-        CpuStrategy.Decision d = strategy.decideAction(game, cpu);
+        for (int seed = 0; seed < 50; seed++) {
+            CpuStrategy.Decision d = new CpuStrategy(new Random(seed)).decideAction(game, cpu);
 
-        assertThat(d).isInstanceOf(CpuStrategy.Decision.Bid.class);
-        CpuStrategy.Decision.Bid bid = (CpuStrategy.Decision.Bid) d;
-        assertThat(bid.quantity()).isEqualTo(1);
-        assertThat(bid.face()).isBetween(1, 5);
+            assertThat(d).isInstanceOf(CpuStrategy.Decision.Bid.class);
+            CpuStrategy.Decision.Bid bid = (CpuStrategy.Decision.Bid) d;
+            assertThat(bid.quantity()).isEqualTo(1);
+            assertThat(bid.face()).isBetween(1, 5);
+        }
+    }
+
+    @Test
+    void openingBid_endgame_bidsOnlyFaceBackedByOwnDice() {
+        Player cpu = new Player("cpu", "CPU 1", true);
+        cpu.setDice(List.of(3));
+        Player human = new Player("human", "Human", false);
+        human.setDice(List.of(1));
+        Game game = minimalPlayingGame(cpu, human);
+        game.setCurrentBid(null);
+
+        for (int seed = 0; seed < 50; seed++) {
+            CpuStrategy.Decision d = new CpuStrategy(new Random(seed)).decideAction(game, cpu);
+
+            assertThat(d).isEqualTo(new CpuStrategy.Decision.Bid(1, 3));
+        }
     }
 
     @Test
@@ -84,16 +101,6 @@ class CpuStrategyTest {
 
     @Test
     void followUpBid_neverExceedsTotalSurvivorDiceCount() {
-        Player cpu = new Player("cpu", "CPU 1", true);
-        cpu.setDice(List.of(3, 3, 3, 3, 3));
-        Player human = stubHuman();
-        int totalDiceCount = cpu.getDice().size() + human.getDice().size();
-        Game game = minimalPlayingGame(cpu, human);
-        Bid prev = new Bid(totalDiceCount, 5, human.getId());
-        game.setCurrentBid(prev);
-        game.setLastBidPlayerId(human.getId());
-        game.setCurrentPlayerIndex(0);
-
         Random pickLargestCandidate =
                 new Random() {
                     @Override
@@ -102,13 +109,27 @@ class CpuStrategyTest {
                     }
                 };
         CpuStrategy strategy = new CpuStrategy(pickLargestCandidate);
-        CpuStrategy.Decision d = strategy.decideAction(game, cpu);
+        Random setup = new Random(123);
+        int bids = 0;
+        for (int i = 0; i < 300; i++) {
+            Player cpu = new Player("cpu", "CPU 1", true);
+            cpu.setDice(rollDice(setup, 1 + setup.nextInt(5)));
+            Player human = new Player("human", "Human", false);
+            human.setDice(rollDice(setup, 1 + setup.nextInt(5)));
+            int totalDiceCount = cpu.getDice().size() + human.getDice().size();
+            Game game = minimalPlayingGame(cpu, human);
+            Bid prev = new Bid(1 + setup.nextInt(totalDiceCount), 1 + setup.nextInt(6), human.getId());
+            game.setCurrentBid(prev);
+            game.setLastBidPlayerId(human.getId());
 
-        if (d instanceof CpuStrategy.Decision.Bid bid) {
-            assertThat(bid.quantity()).isLessThanOrEqualTo(totalDiceCount);
+            if (strategy.decideAction(game, cpu) instanceof CpuStrategy.Decision.Bid(int q, int f)) {
+                bids++;
+                assertThat(q).isLessThanOrEqualTo(totalDiceCount);
+                assertThat(Game.isValidBidAfter(prev, new Bid(q, f, cpu.getId()))).isTrue();
+            }
         }
+        assertThat(bids).isGreaterThan(50);
     }
-
 
     @Test
     void challengesImplausibleBidJudgedOnlyFromOwnDice() {
@@ -177,14 +198,7 @@ class CpuStrategyTest {
         game.setLastBidPlayerId(human.getId());
         game.setCurrentPlayerIndex(0);
 
-        Random pickLargestCandidate =
-                new Random() {
-                    @Override
-                    public int nextInt(int bound) {
-                        return bound - 1;
-                    }
-                };
-        CpuStrategy strategy = new CpuStrategy(pickLargestCandidate);
+        CpuStrategy strategy = new CpuStrategy(new Random(1));
         CpuStrategy.Decision d = strategy.decideAction(game, cpu);
 
         assertThat(d).isInstanceOf(CpuStrategy.Decision.Challenge.class);
@@ -214,6 +228,14 @@ class CpuStrategyTest {
 
         assertThat(game.getCurrentBid()).isNotNull();
         assertThat(game.getCurrentBid().getPlayerId()).isEqualTo(cpu.getId());
+    }
+
+    private static List<Integer> rollDice(Random random, int count) {
+        List<Integer> dice = new java.util.ArrayList<>();
+        for (int i = 0; i < count; i++) {
+            dice.add(1 + random.nextInt(6));
+        }
+        return dice;
     }
 
     private static Player stubHuman() {
