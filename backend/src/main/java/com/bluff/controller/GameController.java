@@ -9,9 +9,11 @@ import com.bluff.dto.GameSummaryResponse;
 import com.bluff.dto.JoinRequest;
 import com.bluff.dto.JoinResponse;
 import com.bluff.dto.PlayerResponse;
+import com.bluff.dto.RevealedHandResponse;
 import com.bluff.dto.StartRequest;
 import com.bluff.dto.TurnLogEntryResponse;
 import com.bluff.model.Action;
+import com.bluff.model.RevealedHand;
 import com.bluff.service.GameService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -105,7 +107,8 @@ public class GameController {
                             e.face(),
                             e.actualCount(),
                             e.challengeResult(),
-                            e.penaltyDescription()));
+                            e.penaltyDescription(),
+                            revealedHands(e)));
         }
         return new GameResponse(
                 v.id(),
@@ -117,5 +120,16 @@ public class GameController {
                 v.winnerPlayerId(),
                 v.myDice(),
                 actionLog);
+    }
+
+    private static List<RevealedHandResponse> revealedHands(GameService.TurnLogSnapshot e) {
+        if (e.revealedHands() == null) {
+            return null;
+        }
+        List<RevealedHandResponse> hands = new ArrayList<>();
+        for (RevealedHand h : e.revealedHands()) {
+            hands.add(new RevealedHandResponse(h.playerId(), h.playerName(), h.dice()));
+        }
+        return hands;
     }
 }

@@ -1,5 +1,7 @@
 package com.bluff.model;
 
+import java.util.List;
+
 public class TurnLogEntry {
     public static final String TYPE_BID = "BID";
     public static final String TYPE_CHALLENGE = "CHALLENGE";
@@ -14,6 +16,7 @@ public class TurnLogEntry {
     private final Integer actualCount;
     private final String challengeResult;
     private final String penaltyDescription;
+    private final List<RevealedHand> revealedHands;
 
     private TurnLogEntry(
             int round,
@@ -24,7 +27,8 @@ public class TurnLogEntry {
             Integer face,
             Integer actualCount,
             String challengeResult,
-            String penaltyDescription) {
+            String penaltyDescription,
+            List<RevealedHand> revealedHands) {
         this.round = round;
         this.playerId = playerId;
         this.playerName = playerName;
@@ -34,10 +38,11 @@ public class TurnLogEntry {
         this.actualCount = actualCount;
         this.challengeResult = challengeResult;
         this.penaltyDescription = penaltyDescription;
+        this.revealedHands = revealedHands;
     }
 
     public static TurnLogEntry bid(int round, String playerId, String playerName, int quantity, int face) {
-        return new TurnLogEntry(round, playerId, playerName, TYPE_BID, quantity, face, null, null, null);
+        return new TurnLogEntry(round, playerId, playerName, TYPE_BID, quantity, face, null, null, null, null);
     }
 
     public static TurnLogEntry challenge(
@@ -46,13 +51,23 @@ public class TurnLogEntry {
             String playerName,
             int actualCount,
             String challengeResult,
-            String penaltyDescription) {
+            String penaltyDescription,
+            List<RevealedHand> revealedHands) {
         return new TurnLogEntry(
-                round, playerId, playerName, TYPE_CHALLENGE, null, null, actualCount, challengeResult, penaltyDescription);
+                round,
+                playerId,
+                playerName,
+                TYPE_CHALLENGE,
+                null,
+                null,
+                actualCount,
+                challengeResult,
+                penaltyDescription,
+                List.copyOf(revealedHands));
     }
 
     public static TurnLogEntry roundStart(int round, String playerId, String playerName) {
-        return new TurnLogEntry(round, playerId, playerName, TYPE_ROUND_START, null, null, null, null, null);
+        return new TurnLogEntry(round, playerId, playerName, TYPE_ROUND_START, null, null, null, null, null, null);
     }
 
     public int getRound() {
@@ -89,5 +104,9 @@ public class TurnLogEntry {
 
     public String getPenaltyDescription() {
         return penaltyDescription;
+    }
+
+    public List<RevealedHand> getRevealedHands() {
+        return revealedHands;
     }
 }

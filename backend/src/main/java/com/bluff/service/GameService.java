@@ -6,6 +6,7 @@ import com.bluff.model.Bid;
 import com.bluff.model.Game;
 import com.bluff.model.GameState;
 import com.bluff.model.Player;
+import com.bluff.model.RevealedHand;
 import com.bluff.model.TurnLogEntry;
 import com.bluff.repository.GameRepository;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -210,7 +211,8 @@ public class GameService {
             Integer face,
             Integer actualCount,
             String challengeResult,
-            String penaltyDescription) {
+            String penaltyDescription,
+            List<RevealedHand> revealedHands) {
 
         static TurnLogSnapshot from(TurnLogEntry e) {
             return new TurnLogSnapshot(
@@ -222,7 +224,8 @@ public class GameService {
                     e.getFace(),
                     e.getActualCount(),
                     e.getChallengeResult(),
-                    e.getPenaltyDescription());
+                    e.getPenaltyDescription(),
+                    e.getRevealedHands());
         }
     }
 
