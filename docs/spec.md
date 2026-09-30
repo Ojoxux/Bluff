@@ -41,7 +41,7 @@ BLUFFアプリケーションサーバーの仕様はこのファイルをSSOT�
 
 - 人間側は、自分の出目だけ見える（`viewerPlayerId`が自分のときだけ`myDice`を返す、など）
 - 人間からは、CPUも含め他プレイヤーの出目は見えない（APIでは他の`dice`の中身は返さない。サーバ内部ではCPUの出目は計算に使う）
-- Challengeが呼ばれてから罰の適用が終わるまでのあいだは、原作どおり「卓に全員の出目を出した」状態として扱う。クライアントは結果確認のため、一時的に全員の出目を返してよい（8.5の返却形は実装でそろえる）
+- Challengeが呼ばれてから罰の適用が終わるまでのあいだは、原作どおり「卓に全員の出目を出した」状態として扱う。公開された出目は、CHALLENGEの行動履歴に`revealedHands`として残して返す（6.5）
 
 ### 2.3 出目とSTAR
 
@@ -72,24 +72,28 @@ BLUFFアプリケーションサーバーの仕様はこのファイルをSSOT�
 ### 2.5 次にできる宣言（前のBidのあと）
 
 次の番は、前のBidに続けて許される次のBidを言うか、Challengeするかのどちらかだけ。  
-原作では、宣言は1のマスから時計回りに強くなる一方向にしか進めない。本仕様もそれに従い、**出目の数字は前の宣言より小さくしない**（`Fn` < `Fp` は不可）。
+原作では、前の宣言より**多い個数**を言うか、**より大きな出目**に変更する。出目を大きくした場合は個数を増やさなくてよい。個数を増やす場合は出目を小さくしてもよい。
 
 記号: 直前の宣言を（`Qp`, `Fp`）、新しい宣言を（`Qn`, `Fn`）。`Fp` / `Fn`は4章の整数（`6` = STAR）。
 
 数字同士（`Fp`と`Fn`がどちらも1〜5）
 
-次が有効になる例:
+次が有効になる例（前が「3が9個」）:
 
-- 出目を上げる。個数は前と同じでもよい。例: 前が「3が9個」→「4が9個」。
-- 出目が同じなら、個数だけ上げる。例: 前が「3が9個」→「3が10個」。
-- 出目も個数も上げる。例: 前が「3が9個」→「4が10個」。
+- 出目を上げる。個数は前と同じでもよい。例: 「4が9個」。
+- 個数を上げる。出目は同じでも、大きくしても小さくしてもよい。例: 「3が10個」「4が10個」「2が10個」。
+
+次は無効:
+
+- 個数が同じで出目が同じか小さい。例: 「3が9個」「2が9個」。
+- 個数を減らす。例: 「5が8個」。
 
 数字同士のときの判定式（`Fp`と`Fn`がともに1〜5）
 
-次が有効になるのは次のどちらかを満たすとき（出目→個数の辞書順で「強くなる」ことと同じ）。
+次が有効になるのは次のどちらかを満たすとき（個数→出目の辞書順で「強くなる」ことと同じ）。
 
-- `Fn` > `Fp`かつ`Qn` ≥ `Qp`
-- `Fn` = `Fp`かつ`Qn` > `Qp`
+- `Qn` > `Qp`
+- `Qn` = `Qp`かつ`Fn` > `Fp`
 
 STARを含む宣言の追加条件
 
@@ -281,8 +285,19 @@ HTTPとの対応
 | `actualCount`        | Integerまたはなし | CHALLENGE時: 実際の個数 A（2.3の数え方で求めた値）                 |
 | `challengeResult`    | Stringまたはなし  | CHALLENGE時: `"BIDDER_LOSES"`/`"CHALLENGER_LOSES"`/`"EXACT_MATCH"` |
 | `penaltyDescription` | Stringまたはなし  | CHALLENGE時の罰の説明（例: "CPU 1 がダイス2個失う"）               |
+| `revealedHands`      | Listまたはなし    | CHALLENGE時: 罰を適用する前に公開された全生存者の出目（6.5.1）     |
 
 `ROUND_START`は新しいラウンドの開始を示すマーカー。ラウンド番号を区切りとして表示するために使う。`playerId`/`playerName`にはそのラウンドの先攻プレイヤーを入れる。
+
+#### 6.5.1 `RevealedHand`（Challengeで公開された1人分の出目）
+
+| 名前         | 型              | 説明                                   |
+| ------------ | --------------- | -------------------------------------- |
+| `playerId`   | String          | プレイヤーID                           |
+| `playerName` | String          | 表示名                                 |
+| `dice`       | List\<Integer\> | 罰を適用する前の出目（4章の数字）      |
+
+`players`の順に、Challenge時点で生存している全員分を入れる。公開されるのは振り直す前の出目なので、次のラウンドの出目が漏れることはない。
 
 ### 6.6 CPUについて（サーバ側）
 
@@ -365,7 +380,7 @@ HTTPとの対応
    - `A < Q` … 基本は宣言者。宣言者がeliminatedなら、リスト順で宣言者の次の生存者
    - `A > Q` … 基本はChallengeした人。eliminatedなら次の生存者
    - `A == Q` … 基本は宣言者（この分岐では宣言者は罰を受けない）。いなければ次の生存者
-5. `actionLog`にCHALLENGEエントリを追加（`round`は`currentRound`、`type`は`"CHALLENGE"`、`actualCount`にAの値、`challengeResult`に`"BIDDER_LOSES"`/`"CHALLENGER_LOSES"`/`"EXACT_MATCH"`、`penaltyDescription`に罰の説明文を記録）
+5. `actionLog`にCHALLENGEエントリを追加（`round`は`currentRound`、`type`は`"CHALLENGE"`、`actualCount`にAの値、`challengeResult`に`"BIDDER_LOSES"`/`"CHALLENGER_LOSES"`/`"EXACT_MATCH"`、`penaltyDescription`に罰の説明文、`revealedHands`に罰を適用する前の全生存者の出目を記録）
 6. `resolveRound()`を呼ぶ
 
 `removeDice(Player p, int n)`（メソッド化推奨）
@@ -556,7 +571,11 @@ Challengeの例
       "face": null,
       "actualCount": 2,
       "challengeResult": "BIDDER_LOSES",
-      "penaltyDescription": "CPU 1 がダイス1個失う"
+      "penaltyDescription": "CPU 1 がダイス1個失う",
+      "revealedHands": [
+        { "playerId": "uuid", "playerName": "CPU 1", "dice": [5, 2, 3, 1, 4] },
+        { "playerId": "uuid", "playerName": "CPU 2", "dice": [6, 1, 1, 2, 3] }
+      ]
     },
     {
       "round": 2,
@@ -576,7 +595,7 @@ Challengeの例
 - `state`が`FINISHED`のとき: `winnerPlayerId`に勝者ID。`currentPlayer`はnullでよい
 - `viewerPlayerId`が正しく、その人がいるとき: `myDice`に配列（例`[1, 6, 5]`の`6`はSTAR）
 - 各プレイヤーに`cpu`（boolean）を含めてよい（UIで「相手はCPU」と表示する）
-- Challengeの罰の前後など、2章2.10の「卓に全員の出目を出した」区間では、各プレイヤーの`dice`の中身を返してよい。通常のBid中は2.2どおり他者の出目は非公開でよい（どちらの状態かは実装で区別できるようにする）
+- Challengeで公開された全員の出目は、`actionLog`のCHALLENGEエントリの`revealedHands`で返す（6.5.1）。`players`の`dice`や`myDice`で他者の出目は返さない（2.2）。BID・ROUND_STARTでは`revealedHands`は`null`
 
 ### 8.6 ゲーム一覧
 
@@ -608,6 +627,7 @@ Challengeの例
 | `ActionRequest`        | `type`, `playerId`, `quantity`, `face`                      |
 | `GameResponse`など     | `GET`の返却（8.5）。`actionLog`を含む                       |
 | `TurnLogEntryResponse` | `actionLog`の各エントリ（6.5の`TurnLogEntry`に対応）        |
+| `RevealedHandResponse` | `revealedHands`の各要素（6.5.1の`RevealedHand`に対応）      |
 
 ---
 
@@ -680,3 +700,4 @@ src/main/java/com/bluff/
 仕様を変えたら、日付と何を変えたかを1行ここかGitのコミットに残すと、みんなで食い違いが減る。
 
 - 2026-03-27: 行動履歴（`actionLog`）を追加。`TurnLogEntry`（6.5）、`Game`に`actionLog`/`currentRound`（6.1）、`bid`/`challenge`/`resolveRound`/`start`でのログ記録（7章）、APIレスポンスに`actionLog`（8.5）、DTO追加（9章）、FINISHED時の即時削除をやめた（10.1）。
+- 2026-09-30: Challengeで公開された全員の出目をCHALLENGEの行動履歴に`revealedHands`として残して返すようにした（2.2、6.5.1、7.4、8.5、9章）。

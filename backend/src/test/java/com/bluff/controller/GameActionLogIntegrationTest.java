@@ -93,6 +93,13 @@ class GameActionLogIntegrationTest {
         assertThat(lastChallenge.get("actualCount").isNumber()).isTrue();
         assertThat(lastChallenge.get("challengeResult").asText()).isNotBlank();
         assertThat(lastChallenge.get("penaltyDescription").asText()).isNotBlank();
+        JsonNode hands = lastChallenge.get("revealedHands");
+        assertThat(hands.size()).isEqualTo(2);
+        for (JsonNode hand : hands) {
+            assertThat(hand.get("playerId").asText()).isNotBlank();
+            assertThat(hand.get("playerName").asText()).isNotBlank();
+            assertThat(hand.get("dice").size()).isEqualTo(5);
+        }
     }
 
     @Test

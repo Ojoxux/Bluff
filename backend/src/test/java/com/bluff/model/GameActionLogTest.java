@@ -123,6 +123,32 @@ class GameActionLogTest {
         assertThat(ch.getPenaltyDescription()).isEqualTo("宣言者以外の全員がダイス1個ずつ失う");
     }
 
+    // CHALLENGEログに、罰を適用する前の全員の出目が公開されること
+    @Test
+    void challenge_logsRevealedHandsBeforePenalty() {
+        Game g = newGameTwoPlayers();
+        g.start("h1");
+        setAllDice(g, Arrays.asList(2, 3, 4, 5, 6), Arrays.asList(1, 1, 2, 2, 3));
+        g.bid("h1", 5, 1);
+        g.challenge("p2");
+
+        TurnLogEntry ch = lastChallengeEntry(g);
+        assertThat(ch.getRevealedHands()).containsExactly(
+                new RevealedHand("h1", "Host", List.of(2, 3, 4, 5, 6)),
+                new RevealedHand("p2", "Bob", List.of(1, 1, 2, 2, 3)));
+        assertThat(g.getPlayers().get(0).getDice()).hasSize(3);
+    }
+
+    // BIDログには公開された出目が入らないこと
+    @Test
+    void bid_hasNoRevealedHands() {
+        Game g = newGameTwoPlayers();
+        g.start("h1");
+        g.bid("h1", 1, 1);
+
+        assertThat(g.getActionLog().get(0).getRevealedHands()).isNull();
+    }
+
     // 卓が続くときcurrentRoundが進み、最後にROUND_START（先攻）が付くこと
     @Test
     void resolveRound_whenContinuing_incrementsRound_andAddsRoundStart() {

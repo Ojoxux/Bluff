@@ -227,6 +227,7 @@ public class Game {
         String bidderId = lastBidPlayerId != null ? lastBidPlayerId : currentBid.getPlayerId();
         Player bidder = requirePlayer(bidderId);
         int a = countActualQuantity(f);
+        List<RevealedHand> revealedHands = revealHands();
 
         if (a < q) {
             removeDice(bidder, q - a);
@@ -268,9 +269,20 @@ public class Game {
             penaltyDescription = "宣言者以外の全員がダイス1個ずつ失う";
         }
         actionLog.add(
-                TurnLogEntry.challenge(currentRound, playerId, challenger.getName(), a, challengeResult, penaltyDescription));
+                TurnLogEntry.challenge(
+                        currentRound, playerId, challenger.getName(), a, challengeResult, penaltyDescription, revealedHands));
 
         resolveRound();
+    }
+
+    private List<RevealedHand> revealHands() {
+        List<RevealedHand> hands = new ArrayList<>();
+        for (Player p : players) {
+            if (!p.isEliminated()) {
+                hands.add(new RevealedHand(p.getId(), p.getName(), List.copyOf(p.getDice())));
+            }
+        }
+        return hands;
     }
 
     /**

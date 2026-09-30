@@ -1,5 +1,7 @@
 package com.bluff.dto;
 
+import java.util.List;
+
 public record TurnLogEntryResponse(
         int round,
         String playerId,
@@ -9,4 +11,5 @@ public record TurnLogEntryResponse(
         Integer face,
         Integer actualCount,
         String challengeResult,
-        String penaltyDescription) {}
+        String penaltyDescription,
+        List<RevealedHandResponse> revealedHands) {}
